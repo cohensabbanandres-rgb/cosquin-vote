@@ -12,8 +12,8 @@
 
   // --- CSV parsing (simple + works for your format) ---
   function parseCSV(text){
-  // Detect delimiter: comma or semicolon
-  const delimiter = text.includes(";") && !text.includes(",") ? ";" : ",";
+  // Detect delimiter ; vs ,
+  const delimiter = text.includes(";") ? ";" : ",";
 
   const rows = [];
   let cur = "", row = [], inQ=false;
@@ -25,10 +25,43 @@
     if (ch === '"'){ inQ = !inQ; continue; }
 
     if (ch === delimiter && !inQ){
-      row.push(cur.trim());
-      cur="";
+      row.push(cur.trim()); cur=""; continue;
+    }
+
+    if ((ch === "\n" || ch === "\r") && !inQ){
+      if (ch === "\r" && nx === "\n") i++;
+      row.push(cur.trim()); cur="";
+      if (row.some(c => c !== "")) rows.push(row);
+      row = [];
       continue;
     }
+
+    cur += ch;
+  }
+
+  if (cur.length || row.length){ row.push(cur.trim()); rows.push(row); }
+
+  if (!rows.length) throw new Error("CSV vacío");
+
+  const header = rows[0].map(x => (x||"").trim());
+  const stages = header.slice(1).filter(Boolean);
+
+  const blocks = [];
+  for (let r=1;r<rows.length;r++){
+    const time = (rows[r][0]||"").trim();
+    if (!time) continue;
+
+    const bands = [];
+    for (let c=1;c<rows[r].length;c++){
+      const band = (rows[r][c]||"").trim();
+      const stage = stages[c-1];
+      if (band && stage) bands.push({ time, stage, band });
+    }
+    blocks.push({ time, bands });
+  }
+
+  return { stages, blocks };
+}
 
     if ((ch === '\n' || ch === '\r') && !inQ){
       if (ch === '\r' && nx === '\n') i++;
@@ -379,7 +412,15 @@ renderGrid(grid, data, day, votes, false);
       out.innerHTML = "";
 
       for (const day of ["14","15"]){
-        const data = await loadDay(day);
+        const data = await
+async function loadDay(day){
+    const path = day === "14" ? "data/day14.csv" : "data/day15.csv";
+    const res = await fetch(path);
+    if (!res.ok) throw new Error("No pude cargar " + path + " (HTTP " + res.status + ")");
+    const text = await res.text();
+    return parseCSV(text);
+}
+
 
         const all = scheduleForGroup(data, day, votesByPerson);
         const bestSplit = bestTwoGroupSplit(data, day, votesByPerson);
