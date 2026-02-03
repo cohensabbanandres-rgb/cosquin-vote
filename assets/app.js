@@ -12,21 +12,68 @@
 
   // --- CSV parsing (simple + works for your format) ---
   function parseCSV(text){
-    // Handles commas + quoted cells
-    const rows = [];
-    let cur = "", row = [], inQ=false;
-    for (let i=0;i<text.length;i++){
-      const ch = text[i], nx = text[i+1];
-      if (ch === '"' && inQ && nx === '"'){ cur += '"'; i++; continue; }
-      if (ch === '"'){ inQ = !inQ; continue; }
-      if (ch === ',' && !inQ){ row.push(cur); cur=""; continue; }
-      if ((ch === '\n' || ch === '\r') && !inQ){
-        if (ch === '\r' && nx === '\n') i++;
-        row.push(cur); cur="";
-        if (row.some(c => c.trim() !== "")) rows.push(row);
-        row = [];
-        continue;
+  // Detect delimiter: comma or semicolon
+  const delimiter = text.includes(";") && !text.includes(",") ? ";" : ",";
+
+  const rows = [];
+  let cur = "", row = [], inQ=false;
+
+  for (let i=0;i<text.length;i++){
+    const ch = text[i], nx = text[i+1];
+
+    if (ch === '"' && inQ && nx === '"'){ cur += '"'; i++; continue; }
+    if (ch === '"'){ inQ = !inQ; continue; }
+
+    if (ch === delimiter && !inQ){
+      row.push(cur.trim());
+      cur="";
+      continue;
+    }
+
+    if ((ch === '\n' || ch === '\r') && !inQ){
+      if (ch === '\r' && nx === '\n') i++;
+      row.push(cur.trim());
+      cur="";
+      if (row.some(c => c !== "")) rows.push(row);
+      row = [];
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  if (cur.length || row.length){
+    row.push(cur.trim());
+    rows.push(row);
+  }
+
+  if (!rows.length) throw new Error("CSV vacío");
+
+  const header = rows[0].map(h => h.trim());
+  const stages = header.slice(1);
+
+  const blocks = [];
+  for (let r=1;r<rows.length;r++){
+    const time = rows[r][0];
+    if (!time) continue;
+
+    const bands = [];
+    for (let c=1;c<rows[r].length;c++){
+      const band = rows[r][c];
+      if (band){
+        bands.push({
+          time,
+          stage: stages[c-1],
+          band
+        });
       }
+    }
+    blocks.push({ time, bands });
+  }
+
+  return { stages, blocks };
+}
+
       cur += ch;
     }
     if (cur.length || row.length){ row.push(cur); rows.push(row); }
