@@ -1,44 +1,19 @@
-<div id="error" class="error" style="display:none;"></div>
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vote</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="assets/styles.css?v=99" />
 </head>
-  <script>
-  // Debug visible en pantalla
-  const dbg = document.createElement("div");
-  dbg.style.position = "fixed";
-  dbg.style.bottom = "12px";
-  dbg.style.left = "12px";
-  dbg.style.right = "12px";
-  dbg.style.padding = "10px 12px";
-  dbg.style.borderRadius = "12px";
-  dbg.style.border = "1px solid #ffffff33";
-  dbg.style.background = "#00000088";
-  dbg.style.backdropFilter = "blur(6px)";
-  dbg.style.fontSize = "12px";
-  dbg.style.zIndex = "9999";
-  dbg.textContent = "Debug: vote.html cargó ✅";
-  document.body.appendChild(dbg);
-
-  window.addEventListener("error", (e) => {
-    dbg.textContent = "JS ERROR: " + (e?.message || e);
-  });
-
-  // Confirmar que CosquinApp existe
-  setTimeout(() => {
-    dbg.textContent = "Debug: CosquinApp = " + (typeof window.CosquinApp);
-  }, 300);
-</script>
 <body>
   <div class="container">
     <a href="index.html">← Home</a>
-    <h1 id="title"></h1>
+    <h1 id="title">Loading…</h1>
+
+    <!-- 👇 ESTO ES CLAVE: el grid se renderiza acá -->
     <div id="error" class="error" style="display:none;"></div>
-    <div id="grid"></div>
+    <div id="grid" class="card">Cargando grilla…</div>
 
     <div class="buttons">
       <button id="submit">Submit (Lock + Generate Link)</button>
@@ -48,10 +23,21 @@
     <textarea id="share" readonly style="display:none;"></textarea>
   </div>
 
-<script src="assets/app.js?v=11"></script>
+  <!-- cache-buster para forzar el JS nuevo -->
+  <script src="assets/app.js?v=99"></script>
   <script>
-    CosquinApp.initVotePage();
+    // Si esto no corre, el problema es que app.js no está cargando
+    if (!window.CosquinApp) {
+      const err = document.getElementById("error");
+      err.style.display = "block";
+      err.textContent = "ERROR: No cargó assets/app.js (revisar ruta/case sensitive).";
+    } else {
+      CosquinApp.initVotePage();
+    }
   </script>
+</body>
+</html>
+
 </body>
 </html>
 
