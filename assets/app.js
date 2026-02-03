@@ -412,7 +412,7 @@
           html += `<div class="card"><h2>Day ${day}</h2><div class="error">No pude cargar day${day}.csv</div></div>`;
           continue;
         }
-        dayData.day = day;
+          dayData.day = day;
 
         const people = Object.keys(byDay[day]);
         html += `<div class="card"><h1>Results — Day ${day}</h1><div class="small">Votos cargados: ${people.length}</div></div>`;
@@ -437,12 +437,7 @@
     if (linksEl && linksEl.value.trim()) compute();
   }
 
-  // ✅ THIS is the critical fix: export to window
+  // ✅ Export to window
   window.CosquinApp = { initVotePage, initResultsPage };
-   
-   window.CosquinApp = window.CosquinApp || {};
-window.CosquinApp.initVotePage = initVotePage;
-window.CosquinApp.initResultsPage = initResultsPage;
 
 })();
-.
