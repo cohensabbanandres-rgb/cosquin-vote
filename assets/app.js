@@ -439,5 +439,10 @@
 
   // ✅ THIS is the critical fix: export to window
   window.CosquinApp = { initVotePage, initResultsPage };
+   
+   window.CosquinApp = window.CosquinApp || {};
+window.CosquinApp.initVotePage = initVotePage;
+window.CosquinApp.initResultsPage = initResultsPage;
+
 })();
 .
