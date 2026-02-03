@@ -39,11 +39,26 @@
 
   // Espera 1 tick por si el navegador todavía no evaluó app.js
   setTimeout(() => {
-    if (!window.CosquinApp) {
+   <script src="assets/app.js?v=999"></script>
+<script>
+  const err = document.getElementById("error");
+  window.addEventListener("error", (e) => {
+    err.style.display = "block";
+    err.textContent = "JS ERROR: " + (e?.message || e);
+  });
+
+  setTimeout(() => {
+    // intenta agarrarlo de window o del scope global
+    const app = window.CosquinApp || (typeof CosquinApp !== "undefined" ? CosquinApp : null);
+    if (!app) {
       err.style.display = "block";
-      err.textContent = "CosquinApp sigue undefined. app.js cargó pero falló al ejecutarse (mirá el error arriba o en Console).";
+      err.textContent = "No se encontró CosquinApp (ni window.CosquinApp ni CosquinApp). app.js está cargando, pero no está exportando bien.";
       return;
     }
+    app.initVotePage();
+  }, 0);
+</script>
+
     CosquinApp.initVotePage();
   }, 0);
 </script>
