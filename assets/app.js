@@ -440,3 +440,4 @@
   // ✅ THIS is the critical fix: export to window
   window.CosquinApp = { initVotePage, initResultsPage };
 })();
+.
