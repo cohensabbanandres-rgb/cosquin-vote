@@ -1,4 +1,4 @@
-/const CosquinApp = (() => {
+window.CosquinApp = (() => {
   const PEOPLE = ["Andy","Brian","Cori","Gon","Marcos","Matu","Nacho","Fran"];
   const WEIGHTS = { must:4, would:3, opt:2, no:0 };
   const LABELS = [
