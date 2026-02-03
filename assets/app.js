@@ -61,13 +61,17 @@ const stages = header.slice(1);
     return { stages, blocks };
   }
 
-  async function loadDay(day){
-    const path = day === "14" ? "data/day14.csv" : "data/day15.csv";
-    const res = await fetch(path);
-    if (!res.ok) throw new Error("Could not load " + path);
-    const text = await res.text();
-    return parseCSV(text);
-  }
+  async function let data;
+try {
+  data = await loadDay(day);
+} catch (e) {
+  const err = document.getElementById("error");
+  err.style.display = "block";
+  err.textContent = "No pude cargar el CSV: " + (e?.message || e);
+  return;
+}
+renderGrid(grid, data, day, votes, false);
+
 
   // Vote storage structure:
   // votes[day][time][stage][band] = one of "must/would/opt/no"
