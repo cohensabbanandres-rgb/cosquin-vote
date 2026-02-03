@@ -1,18 +1,20 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vote</title>
-  <link rel="stylesheet" href="assets/styles.css?v=99" />
+  <title>Cosquín Rock – Vote</title>
+  <link rel="stylesheet" href="assets/styles.css?v=999" />
 </head>
 <body>
+
   <div class="container">
     <a href="index.html">← Home</a>
     <h1 id="title">Loading…</h1>
 
-    <!-- 👇 ESTO ES CLAVE: el grid se renderiza acá -->
     <div id="error" class="error" style="display:none;"></div>
+
+    <!-- Grid -->
     <div id="grid" class="card">Cargando grilla…</div>
 
     <div class="buttons">
@@ -23,53 +25,32 @@
     <textarea id="share" readonly style="display:none;"></textarea>
   </div>
 
-  <!-- cache-buster para forzar el JS nuevo -->
-  <script src="assets/app.js?v=99"></script>
+  <!-- Carga del JS -->
+  <script src="assets/app.js?v=999"></script>
+
+  <!-- Bootstrap seguro -->
   <script>
-    // Si esto no corre, el problema es que app.js no está cargando
-   <script src="assets/app.js?v=123"></script>
-<script>
-  const err = document.getElementById("error");
+    const err = document.getElementById("error");
 
-  // Captura errores del JS y los muestra en pantalla
-  window.addEventListener("error", (e) => {
-    err.style.display = "block";
-    err.textContent = "JS ERROR: " + (e?.message || e);
-  });
-
-  // Espera 1 tick por si el navegador todavía no evaluó app.js
-  setTimeout(() => {
-   <script src="assets/app.js?v=999"></script>
-<script>
-  const err = document.getElementById("error");
-  window.addEventListener("error", (e) => {
-    err.style.display = "block";
-    err.textContent = "JS ERROR: " + (e?.message || e);
-  });
-
-  setTimeout(() => {
-    // intenta agarrarlo de window o del scope global
-    const app = window.CosquinApp || (typeof CosquinApp !== "undefined" ? CosquinApp : null);
-    if (!app) {
+    // Mostrar errores JS en pantalla
+    window.addEventListener("error", (e) => {
       err.style.display = "block";
-      err.textContent = "No se encontró CosquinApp (ni window.CosquinApp ni CosquinApp). app.js está cargando, pero no está exportando bien.";
-      return;
-    }
-    app.initVotePage();
-  }, 0);
-</script>
+      err.textContent = "JS ERROR: " + (e.message || e);
+    });
 
-    CosquinApp.initVotePage();
-  }, 0);
-</script>
-<script src="assets/app.js?v=999"></script>
-<script>
-  CosquinApp.initVotePage();
-</script>
+    // Esperar a que app.js esté evaluado
+    setTimeout(() => {
+      if (!window.CosquinApp || typeof window.CosquinApp.initVotePage !== "function") {
+        err.style.display = "block";
+        err.textContent =
+          "ERROR: window.CosquinApp no está definido o initVotePage no existe. Revisá assets/app.js.";
+        return;
+      }
+
+      // ✅ Arranque correcto
+      window.CosquinApp.initVotePage();
+    }, 0);
+  </script>
 
 </body>
 </html>
-
-</body>
-</html>
-
