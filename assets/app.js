@@ -316,8 +316,7 @@
     }
 
     // votes object
-      let votes = {};
-
+    let votes = {};
 
     // if share exists, load and lock
     const shared = tryLoadShare();
