@@ -1,478 +1,442 @@
-window.CosquinApp = (() => {
-  const PEOPLE = ["Andy","Brian","Cori","Gon","Marcos","Matu","Nacho","Fran"];
-  const WEIGHTS = { must:4, would:3, opt:2, no:0 };
-  const LABELS = [
-    { key:"must", label:"Must (4)" },
-    { key:"would", label:"Would (3)" },
-    { key:"opt",  label:"Optional (2)" },
-    { key:"no",   label:"No (0)" }
+/* Cosquin Rock Planner – standalone, no services
+   Exposes: window.CosquinApp = { initVotePage, initResultsPage }
+*/
+(function () {
+  const WEIGHTS = { must: 4, would: 3, optional: 2, no: 0 };
+  const LEVELS = [
+    { key: "must", label: "Must see" },
+    { key: "would", label: "Would like" },
+    { key: "optional", label: "Optional" },
+    { key: "no", label: "No" },
   ];
 
-  function qs(name){ return new URLSearchParams(location.search).get(name) || ""; }
+  // ---------- small utils ----------
+  const qs = (sel) => document.querySelector(sel);
+  const qsa = (sel) => Array.from(document.querySelectorAll(sel));
+  const esc = (s) =>
+    String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
 
-  // --- CSV parsing (simple + works for your format) ---
-  function parseCSV(text){
-  // Detect delimiter ; vs ,
-  const delimiter = text.includes(";") ? ";" : ",";
-
-  const rows = [];
-  let cur = "", row = [], inQ=false;
-
-  for (let i=0;i<text.length;i++){
-    const ch = text[i], nx = text[i+1];
-
-    if (ch === '"' && inQ && nx === '"'){ cur += '"'; i++; continue; }
-    if (ch === '"'){ inQ = !inQ; continue; }
-
-    if (ch === delimiter && !inQ){
-      row.push(cur.trim()); cur=""; continue;
-    }
-
-    if ((ch === "\n" || ch === "\r") && !inQ){
-      if (ch === "\r" && nx === "\n") i++;
-      row.push(cur.trim()); cur="";
-      if (row.some(c => c !== "")) rows.push(row);
-      row = [];
-      continue;
-    }
-
-    cur += ch;
+  function getParams() {
+    const u = new URL(window.location.href);
+    return Object.fromEntries(u.searchParams.entries());
   }
 
-  if (cur.length || row.length){ row.push(cur.trim()); rows.push(row); }
-
-  if (!rows.length) throw new Error("CSV vacío");
-
-  const header = rows[0].map(x => (x||"").trim());
-  const stages = header.slice(1).filter(Boolean);
-
-  const blocks = [];
-  for (let r=1;r<rows.length;r++){
-    const time = (rows[r][0]||"").trim();
-    if (!time) continue;
-
-    const bands = [];
-    for (let c=1;c<rows[r].length;c++){
-      const band = (rows[r][c]||"").trim();
-      const stage = stages[c-1];
-      if (band && stage) bands.push({ time, stage, band });
-    }
-    blocks.push({ time, bands });
+  function setParam(key, value) {
+    const u = new URL(window.location.href);
+    if (value == null || value === "") u.searchParams.delete(key);
+    else u.searchParams.set(key, value);
+    window.history.replaceState({}, "", u.toString());
   }
 
-  return { stages, blocks };
-}
-
-    if ((ch === '\n' || ch === '\r') && !inQ){
-      if (ch === '\r' && nx === '\n') i++;
-      row.push(cur.trim());
-      cur="";
-      if (row.some(c => c !== "")) rows.push(row);
-      row = [];
-      continue;
-    }
-
-    cur += ch;
+  // base64url helpers
+  function b64urlEncode(str) {
+    const b64 = btoa(unescape(encodeURIComponent(str)));
+    return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  }
+  function b64urlDecode(b64url) {
+    const b64 = b64url.replaceAll("-", "+").replaceAll("_", "/") + "===".slice((b64url.length + 3) % 4);
+    const str = decodeURIComponent(escape(atob(b64)));
+    return str;
   }
 
-  if (cur.length || row.length){
-    row.push(cur.trim());
-    rows.push(row);
+  function showError(msg) {
+    const el = qs("#error");
+    if (!el) return;
+    el.style.display = "block";
+    el.textContent = msg;
   }
 
-  if (!rows.length) throw new Error("CSV vacío");
+  // ---------- CSV loading / parsing ----------
+  async function loadDay(day) {
+    const path = day === "14" ? "data/day14.csv" : "data/day15.csv";
+    const res = await fetch(path, { cache: "no-store" });
+    if (!res.ok) throw new Error(`No pude cargar ${path} (HTTP ${res.status})`);
+    const text = await res.text();
+    return parseCSV(text);
+  }
 
-  const header = rows[0].map(h => h.trim());
-  const stages = header.slice(1);
+  function parseCSV(text) {
+    // Detect delimiter: if there are semicolons, use ; (Google Sheets / Excel ES)
+    const delimiter = text.includes(";") ? ";" : ",";
 
-  const blocks = [];
-  for (let r=1;r<rows.length;r++){
-    const time = rows[r][0];
-    if (!time) continue;
+    // minimal CSV parser with quotes
+    const rows = [];
+    let cur = "";
+    let row = [];
+    let inQ = false;
 
-    const bands = [];
-    for (let c=1;c<rows[r].length;c++){
-      const band = rows[r][c];
-      if (band){
-        bands.push({
-          time,
-          stage: stages[c-1],
-          band
-        });
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const nx = text[i + 1];
+
+      if (ch === '"' && inQ && nx === '"') {
+        cur += '"';
+        i++;
+        continue;
       }
-    }
-    blocks.push({ time, bands });
-  }
-
-  return { stages, blocks };
-}
-
+      if (ch === '"') {
+        inQ = !inQ;
+        continue;
+      }
+      if (ch === delimiter && !inQ) {
+        row.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      if ((ch === "\n" || ch === "\r") && !inQ) {
+        if (ch === "\r" && nx === "\n") i++;
+        row.push(cur.trim());
+        cur = "";
+        if (row.some((c) => c !== "")) rows.push(row);
+        row = [];
+        continue;
+      }
       cur += ch;
     }
-    if (cur.length || row.length){ row.push(cur); rows.push(row); }
+    if (cur.length || row.length) {
+      row.push(cur.trim());
+      if (row.some((c) => c !== "")) rows.push(row);
+    }
+    if (!rows.length) throw new Error("CSV vacío");
 
-    const header = rows[0].map(h => (h || "").trim());
-
-    // Acepta "time", "hora", "Hora", etc. y si viene vacío igual usa col 0 como tiempo
-    const first = (header[0] || "").toLowerCase();
-  const header = rows[0].map(h => (h || "").trim());
-const stages = header.slice(1);
-
-const stages = header.slice(1);
+    const header = rows[0].map((h) => (h || "").trim());
+    const timeHeader = header[0] || "time";
+    const stages = header.slice(1).filter(Boolean);
 
     const blocks = [];
+    for (let r = 1; r < rows.length; r++) {
+      const t = (rows[r][0] || "").trim();
+      if (!t) continue;
 
-    for (let r=1;r<rows.length;r++){
-      const time = (rows[r][0] || "").trim();
-      if (!time) continue;
-      const bands = [];
-      for (let c=1;c<header.length;c++){
-        const stage = stages[c-1];
+      const cells = [];
+      for (let c = 1; c < rows[r].length; c++) {
         const band = (rows[r][c] || "").trim();
-        if (band) bands.push({ time, stage, band });
+        const stage = stages[c - 1];
+        cells.push({ time: t, stage: stage || `Stage ${c}`, band });
       }
-      blocks.push({ time, bands });
+      blocks.push({ time: t, cells });
     }
 
-    return { stages, blocks };
+    return { timeHeader, stages, blocks };
   }
 
-  async function let data;
-try {
- let data;
-try {
-  data = await loadDay(day);
-} catch (e) {
-  const err = document.getElementById("error");
-  err.style.display = "block";
-  err.textContent = "Error cargando CSV: " + (e?.message || e);
-  console.error(e);
-  return;
-}
-renderGrid(grid, data, day, votes, false);
-
-
-  // Vote storage structure:
-  // votes[day][time][stage][band] = one of "must/would/opt/no"
-  function emptyVotes(){ return { "14":{}, "15":{} }; }
-
-  function setVote(votes, day, time, stage, band, key){
-    votes[day] ??= {};
-    votes[day][time] ??= {};
-    votes[day][time][stage] ??= {};
-    votes[day][time][stage][band] = key;
-  }
-  function getVote(votes, day, time, stage, band){
-    return votes?.[day]?.[time]?.[stage]?.[band] ?? "no";
+  // ---------- Voting (grid) ----------
+  function voteKey(day, time, stage) {
+    // a stable key for a time + stage cell
+    return `${day}__${time}__${stage}`;
   }
 
-  // Encode/decode votes into URL-safe string (base64 of JSON)
-  function encodeVotes(obj){
-    const json = JSON.stringify(obj);
-    return btoa(unescape(encodeURIComponent(json))).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
-  }
-  function decodeVotes(str){
-    // restore padding
-    let s = str.replaceAll("-","+").replaceAll("_","/");
-    while (s.length % 4) s += "=";
-    const json = decodeURIComponent(escape(atob(s)));
-    return JSON.parse(json);
-  }
+  function renderGrid(day, data, votes, locked) {
+    const holder = qs("#grid");
+    if (!holder) return;
 
-  // --- Rendering vote grid ---
-  function renderGrid(container, data, day, votes, locked=false){
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    const trh = document.createElement("tr");
-    const thTime = document.createElement("th");
-    thTime.textContent = "Time";
-    trh.appendChild(thTime);
-    data.stages.forEach(s => {
-      const th = document.createElement("th");
-      th.textContent = s;
-      trh.appendChild(th);
-    });
-    thead.appendChild(trh);
-    table.appendChild(thead);
+    const stages = data.stages;
+    const blocks = data.blocks;
 
-    const tbody = document.createElement("tbody");
-    data.blocks.forEach(block => {
-      const tr = document.createElement("tr");
-      const tdTime = document.createElement("td");
-      tdTime.className = "time";
-      tdTime.textContent = block.time;
-      tr.appendChild(tdTime);
+    if (!stages.length || !blocks.length) {
+      holder.innerHTML = `<div class="small">No hay datos para mostrar (stages=${stages.length}, blocks=${blocks.length}). Revisá el CSV.</div>`;
+      return;
+    }
 
-      data.stages.forEach(stage => {
-        const td = document.createElement("td");
-        const bandsHere = block.bands.filter(b => b.stage === stage);
+    let html = `<div class="grid"><table><thead><tr>`;
+    html += `<th class="time">${esc(data.timeHeader || "time")}</th>`;
+    for (const st of stages) html += `<th>${esc(st)}</th>`;
+    html += `</tr></thead><tbody>`;
 
-        if (!bandsHere.length) {
-          td.innerHTML = `<div class="small">—</div>`;
+    for (const b of blocks) {
+      html += `<tr>`;
+      html += `<td class="time">${esc(b.time)}</td>`;
+      for (let i = 0; i < stages.length; i++) {
+        const st = stages[i];
+        const cell = b.cells[i] || { band: "" };
+        const band = (cell.band || "").trim();
+
+        const k = voteKey(day, b.time, st);
+        const selected = votes[k] || "";
+
+        html += `<td>`;
+        if (band) {
+          html += `<div class="band">${esc(band)}</div>`;
+          html += `<div class="voteRow" data-key="${esc(k)}">`;
+          for (const lvl of LEVELS) {
+            const active = selected === lvl.key ? "pill active" : "pill";
+            const dis = locked ? `data-locked="1"` : "";
+            html += `<span class="${active}" data-level="${lvl.key}" ${dis}>${esc(lvl.label)}</span>`;
+          }
+          html += `</div>`;
         } else {
-          bandsHere.forEach(({band, time}) => {
-            const wrap = document.createElement("div");
-            wrap.style.marginBottom = "10px";
+          html += `<div class="small">—</div>`;
+        }
+        html += `</td>`;
+      }
+      html += `</tr>`;
+    }
 
-            const bn = document.createElement("div");
-            bn.className = "band";
-            bn.textContent = band;
-            wrap.appendChild(bn);
+    html += `</tbody></table></div>`;
+    holder.innerHTML = html;
 
-            const row = document.createElement("div");
-            row.className = "voteRow";
+    // attach handlers
+    qsa(".voteRow .pill").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        if (locked) return;
+        if (pill.getAttribute("data-locked") === "1") return;
 
-            LABELS.forEach(({key,label}) => {
-              const pill = document.createElement("div");
-              pill.className = "pill";
-              pill.textContent = label;
+        const row = pill.closest(".voteRow");
+        const k = row.getAttribute("data-key");
+        const lvl = pill.getAttribute("data-level");
 
-              const cur = getVote(votes, day, time, stage, band);
-              if (cur === key) pill.classList.add("active");
+        votes[k] = lvl;
 
-              if (!locked) {
-                pill.onclick = () => {
-                  setVote(votes, day, time, stage, band, key);
-                  // re-render quickly: toggle pills in this row only
-                  row.querySelectorAll(".pill").forEach(p => p.classList.remove("active"));
-                  pill.classList.add("active");
-                };
-              } else {
-                pill.style.cursor = "default";
+        // update UI in that row
+        row.querySelectorAll(".pill").forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+      });
+    });
+  }
+
+  function lockUI() {
+    qsa(".pill").forEach((p) => p.setAttribute("data-locked", "1"));
+    const btn = qs("#submit");
+    if (btn) btn.disabled = true;
+  }
+
+  function generateShareLink(payload) {
+    const encoded = b64urlEncode(JSON.stringify(payload));
+    const u = new URL(window.location.href);
+    u.searchParams.set("share", encoded);
+    // keep day/name
+    return u.toString();
+  }
+
+  function tryLoadShare() {
+    const params = getParams();
+    if (!params.share) return null;
+    try {
+      const json = b64urlDecode(params.share);
+      return JSON.parse(json);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ---------- Results (force plan + A/B) ----------
+  function scoreOf(levelKey) {
+    return WEIGHTS[levelKey] ?? 0;
+  }
+
+  function computePlans(dayData, allPeopleVotes) {
+    // Build per time block options: each stage has a band -> option
+    // Option score = sum of each person's preference for that cell key
+    const times = dayData.blocks.map((b) => b.time);
+    const stages = dayData.stages;
+
+    const perTimeOptions = times.map((t) => {
+      const options = [];
+      for (const st of stages) {
+        const k = voteKey(dayData.day, t, st);
+        let total = 0;
+        const perPerson = {};
+        for (const [person, votes] of Object.entries(allPeopleVotes)) {
+          const lvl = votes[k] || "no";
+          const s = scoreOf(lvl);
+          total += s;
+          perPerson[person] = s;
+        }
+        options.push({ time: t, stage: st, key: k, total, perPerson });
+      }
+      // sort best to worst
+      options.sort((a, b) => b.total - a.total);
+      return options;
+    });
+
+    // Force plan = best option per time
+    const force = perTimeOptions.map((opts) => opts[0]);
+
+    // Create candidate schedules by swapping one time slot to its 2nd best
+    const candidates = [];
+    for (let i = 0; i < perTimeOptions.length; i++) {
+      const opts = perTimeOptions[i];
+      if (opts.length < 2) continue;
+      const cand = force.slice();
+      cand[i] = opts[1];
+      candidates.push(cand);
+    }
+
+    function scheduleScore(schedule) {
+      return schedule.reduce((sum, o) => sum + (o?.total || 0), 0);
+    }
+
+    candidates.sort((a, b) => scheduleScore(b) - scheduleScore(a));
+
+    const A = candidates[0] || force;
+    const B = candidates[1] || force;
+
+    return { force, A, B, perTimeOptions };
+  }
+
+  function renderPlan(title, plan, dayData) {
+    const lines = [];
+    let total = 0;
+    for (const o of plan) {
+      total += o.total || 0;
+      lines.push(`${o.time} — ${o.stage}`);
+    }
+
+    let html = `<div class="card"><h2>${esc(title)}</h2>`;
+    html += `<div class="small">Score total: ${total}</div>`;
+    html += `<div class="grid"><table><thead><tr><th class="time">Hora</th><th>Escenario elegido</th></tr></thead><tbody>`;
+    for (const o of plan) {
+      html += `<tr><td class="time">${esc(o.time)}</td><td>${esc(o.stage)}</td></tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    return html;
+  }
+
+  // ---------- Public init functions ----------
+  async function initVotePage() {
+    const params = getParams();
+    const day = params.day || "14";
+    const name = params.name || "Anon";
+
+    const title = qs("#title");
+    if (title) title.textContent = `Vote – Day ${day} (${name})`;
+
+    // load data
+    let data;
+    try {
+      data = await loadDay(day);
+    } catch (e) {
+      showError(e?.message || String(e));
+      return;
+    }
+
+    // votes object
+    let votes = {};
+
+    // if share exists, load and lock
+    const shared = tryLoadShare();
+    let locked = false;
+    if (shared && shared.votes && shared.day === day) {
+      votes = shared.votes;
+      locked = true;
+      lockUI();
+    }
+
+    renderGrid(day, data, votes, locked);
+
+    // submit button
+    const submit = qs("#submit");
+    const copyBtn = qs("#copy");
+    const shareBox = qs("#share");
+
+    if (submit) {
+      submit.addEventListener("click", () => {
+        // lock
+        lockUI();
+
+        const payload = { day, name, votes };
+        const link = generateShareLink(payload);
+
+        if (shareBox) {
+          shareBox.style.display = "block";
+          shareBox.value = link;
+        }
+        if (copyBtn) {
+          copyBtn.style.display = "inline-block";
+          copyBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              copyBtn.textContent = "Copied!";
+              setTimeout(() => (copyBtn.textContent = "Copy Share Link"), 1200);
+            } catch {
+              // fallback: highlight textarea
+              if (shareBox) {
+                shareBox.focus();
+                shareBox.select();
               }
-
-              row.appendChild(pill);
-            });
-
-            wrap.appendChild(row);
-            td.appendChild(wrap);
-          });
+            }
+          };
         }
-        tr.appendChild(td);
       });
-
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    container.innerHTML = "";
-    const shell = document.createElement("div");
-    shell.className = "grid";
-    shell.appendChild(table);
-    container.appendChild(shell);
-  }
-
-  // --- Scheduling ---
-  function scheduleForGroup(data, day, groupVotesByPerson){
-    // Returns chosen band per time, and scores
-    const chosen = []; // {time, band, stage, scoreBreakdown}
-    const perPerson = {};
-    Object.keys(groupVotesByPerson).forEach(p => perPerson[p] = 0);
-
-    data.blocks.forEach(block => {
-      // Gather all candidates at this time
-      const candidates = [];
-      block.bands.forEach(({time, stage, band}) => {
-        let total = 0, must=0, would=0;
-        for (const [person, votes] of Object.entries(groupVotesByPerson)){
-          const v = getVote(votes, day, time, stage, band);
-          const w = WEIGHTS[v] ?? 0;
-          total += w;
-          if (v === "must") must++;
-          if (v === "would") would++;
-        }
-        candidates.push({time, stage, band, total, must, would});
-      });
-
-      candidates.sort((a,b) =>
-        (b.total - a.total) ||
-        (b.must - a.must) ||
-        (b.would - a.would) ||
-        (a.band.localeCompare(b.band))
-      );
-
-      const pick = candidates[0];
-      chosen.push(pick);
-
-      // Add per-person contribution (what they voted for the chosen band)
-      for (const [person, votes] of Object.entries(groupVotesByPerson)){
-        const v = getVote(votes, day, pick.time, pick.stage, pick.band);
-        perPerson[person] += (WEIGHTS[v] ?? 0);
-      }
-    });
-
-    const totalScore = Object.values(perPerson).reduce((a,b)=>a+b,0);
-    return { chosen, perPerson, totalScore };
-  }
-
-  function allSplits(people){
-    // Unique splits into A & B (avoid duplicates by forcing first person into A)
-    const first = people[0];
-    const rest = people.slice(1);
-    const splits = [];
-    const n = rest.length;
-    for (let mask=0; mask < (1<<n); mask++){
-      const A = [first];
-      const B = [];
-      for (let i=0;i<n;i++){
-        if (mask & (1<<i)) A.push(rest[i]); else B.push(rest[i]);
-      }
-      splits.push({A,B});
     }
-    return splits;
   }
 
-  function bestTwoGroupSplit(data, day, votesByPerson){
-    const splits = allSplits(Object.keys(votesByPerson));
-    let best = null;
+  async function initResultsPage() {
+    // expects:
+    // - textarea#links (one per line)
+    // - div#out14 , div#out15 (or #out)
+    const linksEl = qs("#links");
+    const btn = qs("#compute");
+    const out = qs("#out") || document.body;
 
-    for (const s of splits){
-      const vA = {}; s.A.forEach(p => vA[p] = votesByPerson[p]);
-      const vB = {}; s.B.forEach(p => vB[p] = votesByPerson[p]);
-
-      const resA = scheduleForGroup(data, day, vA);
-      const resB = scheduleForGroup(data, day, vB);
-      const total = resA.totalScore + resB.totalScore;
-
-      if (!best || total > best.total){
-        best = { split:s, resA, resB, total };
-      }
-    }
-    return best;
-  }
-
-  // --- Vote page init ---
-  async function initVotePage(){
-    const day = qs("day");
-    const name = qs("name");
-
-    if (!["14","15"].includes(day)) { alert("Missing day"); location.href="index.html"; return; }
-    if (!PEOPLE.includes(name)) { alert("Pick a valid name on Home"); location.href="index.html"; return; }
-
-    document.getElementById("title").textContent = `Vote – Day ${day} (${name})`;
-    const data = await loadDay(day);
-
-    const votes = emptyVotes();
-    const grid = document.getElementById("grid");
-    renderGrid(grid, data, day, votes, false);
-
-    const submitBtn = document.getElementById("submit");
-    const copyBtn = document.getElementById("copy");
-    const share = document.getElementById("share");
-
-    submitBtn.onclick = () => {
-      // lock + generate link
-      submitBtn.disabled = true;
-      renderGrid(grid, data, day, votes, true);
-
-      const payload = { name, votes };
-      const encoded = encodeVotes(payload);
-      const link = `${location.origin}${location.pathname.replace("vote.html","results.html")}#v=${encoded}`;
-      share.style.display = "block";
-      share.value = link;
-      copyBtn.style.display = "inline-block";
-      alert("Locked! Copy your share link and send it to the group.");
-    };
-
-    copyBtn.onclick = async () => {
-      await navigator.clipboard.writeText(share.value);
-      alert("Copied!");
-    };
-  }
-
-  // --- Results page init ---
-  async function initResultsPage(){
-    // Allow opening a single share link directly (hash)
-    const hash = location.hash.startsWith("#v=") ? location.hash.slice(3) : "";
-
-    const linksEl = document.getElementById("links");
-    if (hash) {
-      const link = location.href;
-      linksEl.value = link + "\n";
-    }
-
-    document.getElementById("compute").onclick = async () => {
-      const lines = linksEl.value.split("\n").map(s=>s.trim()).filter(Boolean);
-      const votesByPerson = {};
-      for (const line of lines){
-        const m = line.match(/#v=([A-Za-z0-9\-_]+)/);
-        if (!m) continue;
-        const payload = decodeVotes(m[1]);
-        if (!payload?.name || !payload?.votes) continue;
-        votesByPerson[payload.name] = payload.votes;
-      }
-
-      const missing = PEOPLE.filter(p => !votesByPerson[p]);
-      if (missing.length) {
-        alert("Missing submissions from: " + missing.join(", "));
+    async function compute() {
+      const text = (linksEl?.value || "").trim();
+      if (!text) {
+        showError("Pegá los links (uno por línea).");
         return;
       }
 
-      const out = document.getElementById("out");
-      out.innerHTML = "";
+      // parse links
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
-      for (const day of ["14","15"]){
-        const data = await
-async function loadDay(day){
-    const path = day === "14" ? "data/day14.csv" : "data/day15.csv";
-    const res = await fetch(path);
-    if (!res.ok) throw new Error("No pude cargar " + path + " (HTTP " + res.status + ")");
-    const text = await res.text();
-    return parseCSV(text);
-}
+      const byDay = { "14": {}, "15": {} };
 
-
-        const all = scheduleForGroup(data, day, votesByPerson);
-        const bestSplit = bestTwoGroupSplit(data, day, votesByPerson);
-
-        out.appendChild(renderScheduleCard(`Day ${day} — Whole Crew`, all));
-        out.appendChild(renderSplitCard(`Day ${day} — Group A / B (best split)`, bestSplit));
+      for (const line of lines) {
+        try {
+          const u = new URL(line);
+          const share = u.searchParams.get("share");
+          if (!share) continue;
+          const payload = JSON.parse(b64urlDecode(share));
+          if (!payload?.day || !payload?.name || !payload?.votes) continue;
+          if (payload.day === "14" || payload.day === "15") {
+            byDay[payload.day][payload.name] = payload.votes;
+          }
+        } catch {
+          // ignore bad lines
+        }
       }
-    };
+
+      let html = "";
+
+      for (const day of ["14", "15"]) {
+        // Load day schedule
+        let dayData;
+        try {
+          dayData = await loadDay(day);
+        } catch (e) {
+          html += `<div class="card"><h2>Day ${day}</h2><div class="error">No pude cargar day${day}.csv</div></div>`;
+          continue;
+        }
+        dayData.day = day;
+
+        const people = Object.keys(byDay[day]);
+        html += `<div class="card"><h1>Results — Day ${day}</h1><div class="small">Votos cargados: ${people.length}</div></div>`;
+
+        if (!people.length) {
+          html += `<div class="card"><div class="small">No hay votos para este día.</div></div>`;
+          continue;
+        }
+
+        const plans = computePlans(dayData, byDay[day]);
+
+        html += renderPlan("Force plan (best total happiness)", plans.force, dayData);
+        html += renderPlan("Plan A (best alternative)", plans.A, dayData);
+        html += renderPlan("Plan B (second alternative)", plans.B, dayData);
+      }
+
+      out.innerHTML = html;
+    }
+
+    if (btn) btn.addEventListener("click", compute);
+    // auto compute if links already pasted
+    if (linksEl && linksEl.value.trim()) compute();
   }
 
-  function renderScheduleCard(title, res){
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<h2>${title}</h2>
-      <div class="small">Total happiness: <b>${res.totalScore}</b></div>`;
-
-    const per = Object.entries(res.perPerson).sort((a,b)=>b[1]-a[1]);
-    const ul = document.createElement("div");
-    ul.className = "small";
-    ul.innerHTML = "<b>Per person:</b> " + per.map(([p,s])=>`${p}: ${s}`).join(" · ");
-    card.appendChild(ul);
-
-    const tbl = document.createElement("table");
-    tbl.innerHTML = `<thead><tr><th>Time</th><th>Chosen</th><th>Stage</th><th>Score</th></tr></thead>`;
-    const tb = document.createElement("tbody");
-    res.chosen.forEach(x=>{
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="time">${x.time}</td><td>${x.band}</td><td>${x.stage}</td><td>${x.total}</td>`;
-      tb.appendChild(tr);
-    });
-    tbl.appendChild(tb);
-    const shell = document.createElement("div");
-    shell.className = "grid";
-    shell.appendChild(tbl);
-    card.appendChild(shell);
-
-    return card;
-  }
-
-  function renderSplitCard(title, best){
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<h2>${title}</h2>
-      <div class="small">Combined happiness: <b>${best.total}</b></div>
-      <div class="small"><b>Group A:</b> ${best.split.A.join(", ")}</div>
-      <div class="small"><b>Group B:</b> ${best.split.B.join(", ")}</div>`;
-
-    card.appendChild(renderScheduleCard("Group A schedule", best.resA));
-    card.appendChild(renderScheduleCard("Group B schedule", best.resB));
-    return card;
-  }
-
-  return { initVotePage, initResultsPage };
+  // ✅ THIS is the critical fix: export to window
+  window.CosquinApp = { initVotePage, initResultsPage };
 })();
-
