@@ -31,12 +31,19 @@ const CosquinApp = (() => {
     }
     if (cur.length || row.length){ row.push(cur); rows.push(row); }
 
-    const header = rows[0].map(h => h.trim());
-    if (!header[0] || header[0].toLowerCase() !== "time") {
-      throw new Error("CSV first column header must be 'time'");
+    const header = rows[0].map(h => (h || "").trim());
+
+    // Acepta "time", "hora", "Hora", etc. y si viene vacío igual usa col 0 como tiempo
+    const first = (header[0] || "").toLowerCase();
+    if (!first) header[0] = "time";
+
+    // Si querés, podés permitir explícitamente "hora" / "time"
+    if (first && first !== "time" && first !== "hora") {
+      // NO hacemos throw: asumimos que es columna de tiempo igual
     }
 
-    const stages = header.slice(1);
+const stages = header.slice(1);
+
     const blocks = [];
 
     for (let r=1;r<rows.length;r++){
