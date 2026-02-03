@@ -3,7 +3,6 @@
 */
 (function () {
   const WEIGHTS = { must: 4, would: 3, optional: 2, no: 0 };
-   votes[bandId] = SCORE_MAP[value];
   const LEVELS = [
     { key: "must", label: "Must see" },
     { key: "would", label: "Would like" },
@@ -317,7 +316,7 @@
     }
 
     // votes object
-   votes[bandId] = 0; // default = No
+      let votes = {};
 
 
     // if share exists, load and lock
