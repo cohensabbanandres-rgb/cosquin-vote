@@ -7,6 +7,32 @@
   <title>Vote</title>
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
+  <script>
+  // Debug visible en pantalla
+  const dbg = document.createElement("div");
+  dbg.style.position = "fixed";
+  dbg.style.bottom = "12px";
+  dbg.style.left = "12px";
+  dbg.style.right = "12px";
+  dbg.style.padding = "10px 12px";
+  dbg.style.borderRadius = "12px";
+  dbg.style.border = "1px solid #ffffff33";
+  dbg.style.background = "#00000088";
+  dbg.style.backdropFilter = "blur(6px)";
+  dbg.style.fontSize = "12px";
+  dbg.style.zIndex = "9999";
+  dbg.textContent = "Debug: vote.html cargó ✅";
+  document.body.appendChild(dbg);
+
+  window.addEventListener("error", (e) => {
+    dbg.textContent = "JS ERROR: " + (e?.message || e);
+  });
+
+  // Confirmar que CosquinApp existe
+  setTimeout(() => {
+    dbg.textContent = "Debug: CosquinApp = " + (typeof window.CosquinApp);
+  }, 300);
+</script>
 <body>
   <div class="container">
     <a href="index.html">← Home</a>
