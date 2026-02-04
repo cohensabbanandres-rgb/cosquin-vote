@@ -14,16 +14,20 @@
   const qs = (sel) => document.querySelector(sel);
   const qsa = (sel) => Array.from(document.querySelectorAll(sel));
   const esc = (s) =>
-    String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+    String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
 
   function getParams() {
     const u = new URL(window.location.href);
-    return Object.fromEntries(u.searchParams.entries());
+     const params = {};
+    u.searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+    return params;
   }
 
   function setParam(key, value) {
@@ -36,7 +40,7 @@
   // base64url helpers
   function b64urlEncode(str) {
     const b64 = btoa(unescape(encodeURIComponent(str)));
-    return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
   }
   function b64urlDecode(b64url) {
     const b64 = b64url.replaceAll("-", "+").replaceAll("_", "/") + "===".slice((b64url.length + 3) % 4);
@@ -121,6 +125,19 @@
       }
       blocks.push({ time: t, cells });
     }
+  // Fill empty slots with the last known band in that stage
+    const lastByStage = new Array(stages.length).fill("");
+    blocks.forEach((block) => {
+      block.cells.forEach((cell, idx) => {
+        if (cell.band) {
+          lastByStage[idx] = cell.band;
+          return;
+        }
+        if (lastByStage[idx]) {
+          cell.band = lastByStage[idx];
+        }
+      });
+    });
 
     return { timeHeader, stages, blocks };
   }
@@ -226,7 +243,7 @@
 
   // ---------- Results (force plan + A/B) ----------
   function scoreOf(levelKey) {
-    return WEIGHTS[levelKey] ?? 0;
+ return WEIGHTS[levelKey] != null ? WEIGHTS[levelKey] : 0;
   }
 
   function computePlans(dayData, allPeopleVotes) {
@@ -268,7 +285,7 @@
     }
 
     function scheduleScore(schedule) {
-      return schedule.reduce((sum, o) => sum + (o?.total || 0), 0);
+      return schedule.reduce((sum, o) => sum + (o && o.total ? o.total : 0), 0);
     }
 
     candidates.sort((a, b) => scheduleScore(b) - scheduleScore(a));
@@ -311,7 +328,7 @@
     try {
       data = await loadDay(day);
     } catch (e) {
-      showError(e?.message || String(e));
+   showError(e && e.message ? e.message : String(e));
       return;
     }
 
@@ -375,7 +392,7 @@
     const out = qs("#out") || document.body;
 
     async function compute() {
-      const text = (linksEl?.value || "").trim();
+     const text = ((linksEl && linksEl.value) || "").trim();
       if (!text) {
         showError("Pegá los links (uno por línea).");
         return;
@@ -392,7 +409,7 @@
           const share = u.searchParams.get("share");
           if (!share) continue;
           const payload = JSON.parse(b64urlDecode(share));
-          if (!payload?.day || !payload?.name || !payload?.votes) continue;
+          if (!payload || !payload.day || !payload.name || !payload.votes) continue;
           if (payload.day === "14" || payload.day === "15") {
             byDay[payload.day][payload.name] = payload.votes;
           }
